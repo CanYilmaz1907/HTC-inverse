@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from dataclasses import dataclass
 from typing import Optional
@@ -29,7 +31,7 @@ class ScannerCriteria:
     min_price_change_percent: float = 2.0
     allowed_funding_intervals_min: tuple[int, int] = (60, 240)  # 1h or 4h
     realtime_scan_enabled: bool = False
-    realtime_scan_every_minutes: int = 5
+    realtime_scan_every_minutes: int = 2
     realtime_min_confidence: float = 0.7  # 0.70 => only alert if Long>=70% or Short>=70%
 
 
@@ -95,7 +97,7 @@ def load_config() -> AppConfig:
 
     min_change = float(os.getenv("MIN_PRICE_CHANGE_PERCENT", "2.0"))
     realtime_enabled = os.getenv("REALTIME_SCAN_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
-    realtime_every = int(os.getenv("REALTIME_SCAN_EVERY_MINUTES", "5"))
+    realtime_every = int(os.getenv("REALTIME_SCAN_EVERY_MINUTES", "2"))
     realtime_conf = float(os.getenv("REALTIME_MIN_CONFIDENCE", "0.7"))
     criteria = ScannerCriteria(
         min_price_change_percent=min_change,

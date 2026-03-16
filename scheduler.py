@@ -75,7 +75,7 @@ async def setup_scheduler(app_bot_data: dict) -> AsyncIOScheduler:
 
     # Optional near-real-time scan (every N minutes) with high-confidence filter
     if getattr(config.criteria, "realtime_scan_enabled", False):
-        every = getattr(config.criteria, "realtime_scan_every_minutes", 5) or 5
+        every = getattr(config.criteria, "realtime_scan_every_minutes", 2) or 2
         min_conf = getattr(config.criteria, "realtime_min_confidence", 0.7) or 0.7
 
         def _make_realtime_job():
