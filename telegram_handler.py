@@ -182,21 +182,15 @@ def format_scan_notification(summary: ScanSummary, funding_filter_applied: bool 
             change = m["price_change_pct"]
             funding_val = m.get("funding_rate")
             funding_rate = (funding_val * 100) if funding_val is not None else None
-            interval_min = m.get("funding_interval_min")
-            interval_hours = (interval_min / 60) if interval_min else None
-            interval_text = f"⏱️ Interval: {interval_hours:g} saat\n" if interval_hours else ""
+            interval_min = m["funding_interval_min"]
+            interval_hours = interval_min / 60 if interval_min else None
 
             funding_text = f"📉 Funding: {funding_rate:.4f}%\n" if funding_rate is not None else ""
-            ml_line = ""
-            if "long_prob" in m and m["long_prob"] is not None:
-                pct = round(m["long_prob"] * 100)
-                ml_line = f"🤖 *Long ihtimali: %{pct}* (Short: %{100 - pct})\n"
             lines.append(
                 f"{idx}️⃣ *{symbol}*\n"
                 f"💰 Fiyat: `${price:,.4f}` (+{change:.2f}%)\n"
                 f"{funding_text}"
-                f"{ml_line}"
-                f"{interval_text}"
+                f"⏱️ Interval: {interval_hours:g} saat"
             )
 
     lines.append("🔗 Bybit Funding Sayfası: `https://www.bybit.com/funding-rate`")

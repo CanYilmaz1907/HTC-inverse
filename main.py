@@ -9,11 +9,6 @@ from scanner import ScanSummary, run_scan
 from scheduler import setup_scheduler
 from telegram_handler import build_application
 
-try:
-    from ml.predict import predict_long_probability
-except ImportError:
-    predict_long_probability = None  # type: ignore[misc, assignment]
-
 
 def _get_timezone(config: AppConfig) -> dt.tzinfo:
     tz_name = (config.timezone or "UTC").strip()
@@ -34,47 +29,28 @@ async def run_scan_once(bot_data: dict, *, mode: str = "full") -> ScanSummary:
     client: BybitClient = bot_data["bybit_client"]
     tz = _get_timezone(config)
     if mode == "rise_only":
-        summary = await run_scan(
+        return await run_scan(
             client,
             config.criteria,
             tz,
             require_actual_funding_negative=False,
             direction="up",
         )
-    elif mode == "fall_only":
-        summary = await run_scan(
+    if mode == "fall_only":
+        return await run_scan(
             client,
             config.criteria,
             tz,
             require_actual_funding_negative=False,
             direction="down",
         )
-    else:
-        summary = await run_scan(
-            client,
-            config.criteria,
-            tz,
-            require_actual_funding_negative=True,
-            direction="up",
-        )
-    await _enrich_matches_with_ml(bot_data, summary)
-    return summary
-
-
-async def _enrich_matches_with_ml(bot_data: dict, summary: ScanSummary) -> None:
-    """Add long_prob to each match if ML model is available."""
-    if predict_long_probability is None:
-        return
-    config: AppConfig = bot_data["config"]
-    client: BybitClient = bot_data["bybit_client"]
-    tz = _get_timezone(config)
-    for m in summary.matches:
-        try:
-            prob = await predict_long_probability(client, m, tz, config)
-            if prob is not None:
-                m["long_prob"] = prob
-        except Exception:  # noqa: BLE001
-            pass
+    return await run_scan(
+        client,
+        config.criteria,
+        tz,
+        require_actual_funding_negative=True,
+        direction="up",
+    )
 
 
 async def _post_init(application: Application) -> None:

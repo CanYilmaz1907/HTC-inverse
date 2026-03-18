@@ -120,28 +120,21 @@ class BybitClient:
         symbol: str,
         interval: str = "5",
         limit: int = 1,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
     ) -> List[List[Any]]:
         """
         GET /v5/market/kline?category=linear&symbol=...&interval=...
-        start_time/end_time in milliseconds (UTC). If both set, returns candles in range.
         Returns kline list where each item is:
         [startTime, open, high, low, close, volume, turnover]
         """
-        params: Dict[str, Any] = {
-            "category": self._config.category,
-            "symbol": symbol,
-            "interval": interval,
-            "limit": limit,
-        }
-        if start_time is not None and end_time is not None:
-            params["start"] = start_time
-            params["end"] = end_time
         data = await self._request(
             "GET",
             "/v5/market/kline",
-            params=params,
+            params={
+                "category": self._config.category,
+                "symbol": symbol,
+                "interval": interval,
+                "limit": limit,
+            },
         )
         return data.get("result", {}).get("list", []) or []
 
