@@ -102,27 +102,16 @@ class BybitClient:
 
         return items
 
-    async def get_funding_history(
-        self,
-        symbol: str,
-        limit: int = 5,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
+    async def get_funding_history(self, symbol: str, limit: int = 5) -> List[Dict[str, Any]]:
         """
         GET /v5/market/funding/history?category=linear&symbol=...
         Mainly kept for potential extensions; not strictly required for current scan logic,
         since current fundingRate comes from the tickers endpoint.
         """
-        params: Dict[str, Any] = {"category": self._config.category, "symbol": symbol, "limit": limit}
-        if start_time is not None:
-            params["startTime"] = start_time
-        if end_time is not None:
-            params["endTime"] = end_time
         data = await self._request(
             "GET",
             "/v5/market/funding/history",
-            params=params,
+            params={"category": self._config.category, "symbol": symbol, "limit": limit},
         )
         return data.get("result", {}).get("list", []) or []
 

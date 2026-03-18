@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import csv
-import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -40,24 +39,9 @@ async def build_dataset(client: BybitClient, symbols: List[str], min_5m_pct: flo
     fifteen_min_ms = 15 * 60 * 1000
 
     for sym in symbols:
-        # Pull more history by paging backwards with end_time
-        fund_hist: List[Dict[str, Any]] = []
-        end_time: Optional[int] = None
-        for _page in range(6):  # up to ~6*200 = 1200 records (depends on API)
-            try:
-                chunk = await client.get_funding_history(symbol=sym, limit=200, end_time=end_time)
-            except Exception:
-                break
-            if not chunk:
-                break
-            fund_hist.extend(chunk)
-            # oldest in this chunk is the last item (API returns newest first)
-            oldest_ts = _parse_ts(chunk[-1].get("fundingRateTimestamp"))
-            if oldest_ts is None:
-                break
-            end_time = oldest_ts - 1
-            await asyncio.sleep(0.05)
-        if not fund_hist:
+        try:
+            fund_hist = await client.get_funding_history(symbol=sym, limit=100)
+        except Exception:
             continue
         for i, rec in enumerate(fund_hist):
             rate = _parse_float(rec.get("fundingRate"))
@@ -136,35 +120,24 @@ async def build_dataset(client: BybitClient, symbols: List[str], min_5m_pct: flo
 
 async def main() -> None:
     config = load_config()
-    async with BybitClient(config.bybit) as client:
-        instruments = await client.get_instruments_info()
-        symbols = []
-        for inst in instruments:
-            if inst.get("status") != "Trading":
-                continue
-            ct = (inst.get("contractType") or "").lower()
-            if ct not in ("perpetual", "linearperpetual"):
-                continue
-            s = inst.get("symbol")
-            if s:
-                symbols.append(s)
+    client = BybitClient(config.bybit)
+    instruments = await client.get_instruments_info()
+    symbols = []
+    for inst in instruments:
+        if inst.get("status") != "Trading":
+            continue
+        ct = (inst.get("contractType") or "").lower()
+        if ct not in ("perpetual", "linearperpetual"):
+            continue
+        s = inst.get("symbol")
+        if s:
+            symbols.append(s)
 
-        # Allow overriding symbol cap (default: all)
-        cap_raw = (os.getenv("DATASET_SYMBOL_CAP", "") or "").strip()
-        if cap_raw:
-            try:
-                cap = int(cap_raw)
-                if cap > 0:
-                    symbols = symbols[:cap]
-            except ValueError:
-                pass
-
-        # Allow overriding threshold for training (default keeps current scan logic)
-        min_change = float(os.getenv("DATASET_MIN_5M_PCT", str(2.0)))
-
-        print(f"Building dataset for {len(symbols)} symbols...")
-        rows = await build_dataset(client, symbols, min_5m_pct=min_change)
-        print(f"Got {len(rows)} samples.")
+    if len(symbols) > 80:
+        symbols = symbols[:80]
+    print(f"Building dataset for {len(symbols)} symbols...")
+    rows = await build_dataset(client, symbols, min_5m_pct=2.0)
+    print(f"Got {len(rows)} samples.")
 
     dataset_path = Path(__file__).resolve().parent / "dataset.csv"
     with open(dataset_path, "w", newline="", encoding="utf-8") as f:

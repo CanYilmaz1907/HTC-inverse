@@ -38,57 +38,29 @@ def train_and_save(dataset_path: Path) -> None:
     X = df[feature_cols].fillna(0).astype(float)
     y = df["label"].astype(int)
 
-    # If dataset is too small / imbalanced, fall back to training on all data without stratified split/calibration.
-    class_counts = y.value_counts().to_dict()
-    min_class = min(class_counts.values()) if class_counts else 0
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
     scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_val_scaled = scaler.transform(X_val)
+
     base = RandomForestClassifier(n_estimators=400, max_depth=12, min_samples_leaf=5, random_state=42, n_jobs=-1)
+    # Calibrate probabilities so % values are more meaningful
+    clf = CalibratedClassifierCV(base, method="sigmoid", cv=3)
+    clf.fit(X_train_scaled, y_train)
 
-    val_acc = None
-    n_train = int(len(y))
-    n_val = 0
-
-    if len(y) >= 50 and min_class >= 5:
-        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_val_scaled = scaler.transform(X_val)
-
-        # Calibrate probabilities so % values are more meaningful
-        clf = CalibratedClassifierCV(base, method="sigmoid", cv=3)
-        clf.fit(X_train_scaled, y_train)
-
-        val_proba = clf.predict_proba(X_val_scaled)[:, 1]
-        val_pred = (val_proba >= 0.5).astype(int)
-        val_acc = float((val_pred == y_val.to_numpy()).mean())
-        n_train = int(len(y_train))
-        n_val = int(len(y_val))
-    else:
-        X_all = scaler.fit_transform(X)
-        base.fit(X_all, y)
-        clf = base
+    val_proba = clf.predict_proba(X_val_scaled)[:, 1]
+    val_pred = (val_proba >= 0.5).astype(int)
+    val_acc = float((val_pred == y_val.to_numpy()).mean())
 
     joblib.dump(clf, MODEL_PATH)
     joblib.dump(scaler, SCALER_PATH)
     with open(META_PATH, "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "feature_names": feature_cols,
-                "val_acc": val_acc,
-                "n_train": n_train,
-                "n_val": n_val,
-                "class_counts": class_counts,
-            },
-            f,
-            indent=2,
-        )
+        json.dump({"feature_names": feature_cols, "val_acc": val_acc, "n_train": int(len(y_train)), "n_val": int(len(y_val))}, f, indent=2)
 
     print(f"Saved model to {MODEL_PATH}, scaler to {SCALER_PATH}, features: {feature_cols}")
     print(f"Train samples: {len(y)}, Long%: {y.mean()*100:.1f}")
-    if val_acc is not None:
-        print(f"Val acc: {val_acc:.3f}")
-    else:
-        print("Val acc: (skipped - dataset too small/imbalanced)")
+    print(f"Val acc: {val_acc:.3f}")
 
 
 def load_model_and_scaler():
