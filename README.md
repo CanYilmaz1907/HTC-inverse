@@ -22,7 +22,7 @@ pip install -r requirements.txt
 - `ADMIN_USER_ID` veya `ADMIN_USER_IDS` – Admin kullanıcı ID’leri (virgülle ayrılmış)
 - `BYBIT_BASE_URL` – Mainnet: `https://api.bybit.com`
 - İsteğe bağlı: `APP_TIMEZONE` (örn. `Asia/Chita`), `MIN_PRICE_CHANGE_PERCENT` (varsayılan 2.0)
-- İsteğe bağlı (anlık tarama): `REALTIME_SCAN_ENABLED=1`, `REALTIME_SCAN_EVERY_MINUTES=2`, `REALTIME_MIN_CONFIDENCE=0.7`
+- İsteğe bağlı (anlık tarama): `REALTIME_SCAN_ENABLED=1`, `REALTIME_SCAN_EVERY_MINUTES=5`, `REALTIME_MIN_CONFIDENCE=0.7`
 
 3. Botu çalıştır:
 

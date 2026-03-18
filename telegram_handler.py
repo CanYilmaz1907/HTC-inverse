@@ -18,7 +18,6 @@ from scanner import ScanSummary
 from zoneinfo import ZoneInfo
 
 from ml.train import load_model_and_scaler
-from ml.predictor import RuleLongShortPredictor
 
 def build_application(config: AppConfig, client: BybitClient) -> Application:
     application = (
@@ -38,7 +37,6 @@ def build_application(config: AppConfig, client: BybitClient) -> Application:
     application.add_handler(CommandHandler("scan_rise", scan_rise))
     application.add_handler(CommandHandler("scan_fall", scan_fall))
     application.add_handler(CommandHandler("mlstatus", mlstatus))
-    application.add_handler(CommandHandler("longshort", longshort))
 
     return application
 
@@ -90,7 +88,7 @@ async def mlstatus(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     clf, scaler, feats = load_model_and_scaler()
     enabled = clf is not None and scaler is not None
     rt_enabled = getattr(config.criteria, "realtime_scan_enabled", False)
-    rt_every = getattr(config.criteria, "realtime_scan_every_minutes", 2)
+    rt_every = getattr(config.criteria, "realtime_scan_every_minutes", 5)
     rt_conf = getattr(config.criteria, "realtime_min_confidence", 0.7)
     text = (
         "🤖 *ML Durumu*\n"
@@ -102,128 +100,6 @@ async def mlstatus(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"Min güven: `{rt_conf:.2f}` (Long≥{rt_conf:.2f} veya Short≥{rt_conf:.2f})\n"
     )
     await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
-
-
-async def longshort(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    En yüksek güvenli 5 LONG ve 5 SHORT sinyalini gösterir (kural tabanlı).
-    """
-    config: AppConfig = context.bot_data["config"]
-    client: BybitClient = context.bot_data["bybit_client"]
-    if not _is_admin(update, config):
-        await update.message.reply_text("❌ Bu komutu kullanma yetkin yok.")
-        return
-
-    await update.message.reply_text("🤖 Uzun/kısa sinyalleri hesaplanıyor, lütfen bekleyin...")
-
-    from main import _get_timezone  # avoid circular
-    tz = _get_timezone(config)
-    predictor = RuleLongShortPredictor(config)
-
-    # Perpetual semboller listesi
-    try:
-        instruments = await client.get_instruments_info()
-    except Exception as exc:  # noqa: BLE001
-        await update.message.reply_text(f"⚠️ Enstrümanlar alınamadı: {exc}")
-        return
-
-    perpetual_symbols: set[str] = set()
-    for inst in instruments:
-        if inst.get("status") != "Trading":
-            continue
-        ct = (inst.get("contractType") or "").lower()
-        if ct not in ("perpetual", "linearperpetual"):
-            continue
-        s = inst.get("symbol")
-        if s:
-            perpetual_symbols.add(s)
-
-    try:
-        tickers = await client.get_tickers()
-    except Exception as exc:  # noqa: BLE001
-        await update.message.reply_text(f"⚠️ Ticker verisi alınamadı: {exc}")
-        return
-
-    decisions: list[dict] = []
-    # Çok ağır olmaması için sırayla, ama sembol sayısı sınırlı değil; çalışması biraz sürebilir.
-    for t in tickers:
-        symbol = t.get("symbol")
-        if not symbol or symbol not in perpetual_symbols:
-            continue
-        last_price = _parse_float(t.get("lastPrice"))
-        if last_price is None or last_price <= 0:
-            continue
-
-        # funding history'den actual funding'i alalım
-        try:
-            fh = await client.get_funding_history(symbol=symbol, limit=1)
-            if not fh:
-                continue
-            funding_rate = _parse_float(fh[0].get("fundingRate"))
-            if funding_rate is None:
-                continue
-        except Exception:
-            continue
-
-        # 5m değişimi scanner'daki mantıkla basitleştiriyoruz: son 5m kapanış değişimi
-        try:
-            five = await client.get_kline(symbol=symbol, interval="5", limit=2)
-            if not five or len(five[0]) < 5 or len(five[-1]) < 5:
-                continue
-            # latest closed candle approx: kullanabileceğimiz iki mumun sonuncusu
-            o5 = _parse_float(five[-1][1])
-            c5 = _parse_float(five[-1][4])
-            if o5 is None or c5 is None or o5 <= 0:
-                continue
-            change_5m = (c5 - o5) / o5 * 100.0
-        except Exception:
-            continue
-
-        decision = await predictor.evaluate_symbol(
-            client=client,
-            symbol=symbol,
-            last_price=last_price,
-            change_5m=change_5m,
-            funding_rate=funding_rate,
-            tz=tz,
-        )
-        if decision is None:
-            continue
-        decisions.append(decision.to_dict())
-
-    if not decisions:
-        await update.message.reply_text("🤖 Şu anda kural tabanlı sinyal bulunamadı.")
-        return
-
-    longs = [d for d in decisions if d["decision"] == "LONG"]
-    shorts = [d for d in decisions if d["decision"] == "SHORT"]
-    longs.sort(key=lambda d: d["confidence"], reverse=True)
-    shorts.sort(key=lambda d: d["confidence"], reverse=True)
-    longs = longs[:5]
-    shorts = shorts[:5]
-
-    lines: list[str] = ["🤖 *Kural Tabanlı Long/Short Sinyalleri*"]
-    if not longs and not shorts:
-        lines.append("_Yeterince güçlü LONG/SHORT sinyali bulunamadı._")
-    else:
-        if longs:
-            lines.append("\n🟢 *En yüksek güvenli LONG sinyalleri*:")
-            for d in longs:
-                f = d["features"]
-                lines.append(
-                    f"- *{d['symbol']}* — Güven: %{d['confidence']:.0f}, sebep: {d['reason']}\n"
-                    f"  lsr={f.get('lsr')}, rsi={f.get('rsi')}, funding={f.get('funding')}, oi_change={f.get('oi_change')}, MA50_diff={f.get('ma50_diff_pct')}%"
-                )
-        if shorts:
-            lines.append("\n🔴 *En yüksek güvenli SHORT sinyalleri*:")
-            for d in shorts:
-                f = d["features"]
-                lines.append(
-                    f"- *{d['symbol']}* — Güven: %{d['confidence']:.0f}, sebep: {d['reason']}\n"
-                    f"  lsr={f.get('lsr')}, rsi={f.get('rsi')}, funding={f.get('funding')}, oi_change={f.get('oi_change')}, MA50_diff={f.get('ma50_diff_pct')}%"
-                )
-
-    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
 
 def _is_admin(update: Update, config: AppConfig) -> bool:
     user = update.effective_user
@@ -352,30 +228,19 @@ async def send_scan_notification(
     summary: ScanSummary,
 ) -> None:
     """
-    Used by scheduler to send notifications: to TELEGRAM_CHAT_ID and to all ADMIN_USER_IDS.
+    Used by scheduler to send notifications without a user command.
     """
     config: AppConfig = bot_data["config"]
     application: Application = bot_data["application"]
 
-    # Toplanacak alıcılar: chat_id + tüm admin'ler (tekrarsız)
-    chat_ids: set[int] = set()
-    if config.telegram.chat_id is not None:
-        chat_ids.add(config.telegram.chat_id)
-    for uid in getattr(config.telegram, "admin_ids", None) or []:
-        if uid is not None:
-            chat_ids.add(uid)
-
-    if not chat_ids:
+    if config.telegram.chat_id is None:
+        # No chat configured – nothing to send to
         return
 
     text = format_scan_notification(summary)
-    for cid in chat_ids:
-        try:
-            await application.bot.send_message(
-                chat_id=cid,
-                text=text,
-                parse_mode=ParseMode.MARKDOWN,
-            )
-        except Exception:  # noqa: BLE001
-            pass  # Bir kullanıcıya ulaşamazsa diğerlerine devam et
+    await application.bot.send_message(
+        chat_id=config.telegram.chat_id,
+        text=text,
+        parse_mode=ParseMode.MARKDOWN,
+    )
 
