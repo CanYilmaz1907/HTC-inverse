@@ -16,9 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from bybit_client import BybitClient
 from config import load_config
-import datetime as dt
-
-from ml.features import _parse_float, _pct_return, extract_features_for_match, FEATURE_NAMES
+from ml.features import _parse_float, _pct_return
 from ml.train import train_and_save
 
 
@@ -91,27 +89,19 @@ async def build_dataset(client: BybitClient, symbols: List[str], min_5m_pct: flo
             target_pct = (close_15m_later - close_now) / close_now * 100.0
             label = 1 if target_pct > 0 else 0
 
-            now_dt = dt.datetime.fromtimestamp((end_5 + five_min_ms) / 1000.0, tz=dt.timezone.utc)
-            # Build full features (disable live-only sources to avoid leakage in training)
-            feats = await extract_features_for_match(
-                client,
-                sym,
-                current_price=float(close_now),
-                change_5m=float(change_5m),
-                funding_rate=float(rate),
-                tz=dt.timezone.utc,
-                now=now_dt,
-                use_live_ticker=False,
-                use_live_orderbook=False,
-            )
-
             row: Dict[str, Any] = {
                 "symbol": sym,
                 "ts": ts_ms,
                 "target_15m_pct": target_pct,
                 "label": label,
-                **{k: feats.get(k, 0.0) for k in FEATURE_NAMES},
+                "funding_rate": rate,
+                "change_5m": change_5m,
             }
+            if i + 1 < len(fund_hist):
+                prev_rate = _parse_float(fund_hist[i + 1].get("fundingRate"))
+                if prev_rate is not None:
+                    row["funding_rate_prev"] = prev_rate
+                    row["funding_change"] = rate - prev_rate
             rows.append(row)
         await asyncio.sleep(0.1)
 

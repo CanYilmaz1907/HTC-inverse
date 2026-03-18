@@ -73,44 +73,6 @@ async def setup_scheduler(app_bot_data: dict) -> AsyncIOScheduler:
             max_instances=1,
         )
 
-    # Optional near-real-time scan (every N minutes) with high-confidence filter
-    if getattr(config.criteria, "realtime_scan_enabled", False):
-        every = getattr(config.criteria, "realtime_scan_every_minutes", 5) or 5
-        min_conf = getattr(config.criteria, "realtime_min_confidence", 0.7) or 0.7
-
-        def _make_realtime_job():
-            async def _job() -> None:
-                from main import run_scan_once  # avoid circular
-
-                try:
-                    summary = await run_scan_once(app_bot_data, mode="full")
-                    # Send only if any match has high confidence
-                    keep = []
-                    for m in summary.matches:
-                        p = m.get("long_prob")
-                        if p is None:
-                            continue
-                        if p >= min_conf or p <= (1.0 - min_conf):
-                            keep.append(m)
-                    summary.matches = keep
-                    summary.matched_count = len(keep)
-                    if keep:
-                        await send_scan_notification(app_bot_data, summary)
-                except Exception as exc:  # noqa: BLE001
-                    await _notify_admin_error(app_bot_data, f"realtime tarama hatası: {exc}")
-
-            return _job
-
-        scheduler.add_job(
-            wrap(_make_realtime_job()),
-            CronTrigger(minute=f"*/{every}", second=5, timezone=tz),
-            id="scan_and_notify_realtime",
-            replace_existing=True,
-            misfire_grace_time=60,
-            coalesce=True,
-            max_instances=1,
-        )
-
     scheduler.start()
     return scheduler
 

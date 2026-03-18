@@ -17,7 +17,6 @@ from config import AppConfig
 from scanner import ScanSummary
 from zoneinfo import ZoneInfo
 
-from ml.train import load_model_and_scaler
 
 def build_application(config: AppConfig, client: BybitClient) -> Application:
     application = (
@@ -36,7 +35,6 @@ def build_application(config: AppConfig, client: BybitClient) -> Application:
     application.add_handler(CommandHandler("scan", scan))
     application.add_handler(CommandHandler("scan_rise", scan_rise))
     application.add_handler(CommandHandler("scan_fall", scan_fall))
-    application.add_handler(CommandHandler("mlstatus", mlstatus))
 
     return application
 
@@ -82,24 +80,6 @@ async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
     await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
-
-async def mlstatus(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    config: AppConfig = context.bot_data["config"]
-    clf, scaler, feats = load_model_and_scaler()
-    enabled = clf is not None and scaler is not None
-    rt_enabled = getattr(config.criteria, "realtime_scan_enabled", False)
-    rt_every = getattr(config.criteria, "realtime_scan_every_minutes", 5)
-    rt_conf = getattr(config.criteria, "realtime_min_confidence", 0.7)
-    text = (
-        "🤖 *ML Durumu*\n"
-        f"Model yüklü: *{'Evet' if enabled else 'Hayır'}*\n"
-        f"Özellik sayısı: `{len(feats) if feats else 0}`\n"
-        "\n⚡ *Anlık tarama (opsiyonel)*\n"
-        f"Açık: *{'Evet' if rt_enabled else 'Hayır'}*\n"
-        f"Periyot: `{rt_every} dk`\n"
-        f"Min güven: `{rt_conf:.2f}` (Long≥{rt_conf:.2f} veya Short≥{rt_conf:.2f})\n"
-    )
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 def _is_admin(update: Update, config: AppConfig) -> bool:
     user = update.effective_user

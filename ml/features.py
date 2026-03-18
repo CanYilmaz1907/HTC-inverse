@@ -62,11 +62,6 @@ FEATURE_NAMES = [
     "funding_rate",
     "funding_rate_prev",
     "funding_change",
-    "oi_5m_change",
-    "oi_5m_level",
-    "ls_buy_ratio",
-    "ls_sell_ratio",
-    "orderbook_imbalance",
     "change_5m",
     "change_15m",
     "change_1h",
@@ -91,8 +86,6 @@ async def extract_features_for_match(
     tz: dt.tzinfo,
     *,
     now: Optional[dt.datetime] = None,
-    use_live_ticker: bool = True,
-    use_live_orderbook: bool = True,
 ) -> Dict[str, float]:
     """
     Extract all ML features for a scan match at 'now' (or current time).
@@ -121,61 +114,6 @@ async def extract_features_for_match(
                 out["funding_change"] = funding_rate - prev
     except Exception:
         pass
-
-    # Open interest + long/short ratio around now (works historically if now passed, but we keep it lightweight)
-    try:
-        oi_end = now_ms
-        oi_start = now_ms - 30 * 60 * 1000
-        oi = await client.get_open_interest(symbol=symbol, interval_time="5min", start_time=oi_start, end_time=oi_end, limit=3)
-        if oi:
-            # newest first
-            newest = oi[0]
-            oi_val = _parse_float(newest.get("openInterest"))
-            if oi_val is not None:
-                out["oi_5m_level"] = oi_val
-            if len(oi) >= 2:
-                prev_val = _parse_float(oi[1].get("openInterest"))
-                if oi_val is not None and prev_val is not None and prev_val != 0:
-                    out["oi_5m_change"] = (oi_val - prev_val) / prev_val
-    except Exception:
-        pass
-
-    try:
-        ar_end = now_ms
-        ar_start = now_ms - 30 * 60 * 1000
-        ratios = await client.get_account_ratio(symbol=symbol, period="5min", start_time=ar_start, end_time=ar_end, limit=1)
-        if ratios:
-            r = ratios[0]
-            buy = _parse_float(r.get("buyRatio"))
-            sell = _parse_float(r.get("sellRatio"))
-            if buy is not None:
-                out["ls_buy_ratio"] = buy
-            if sell is not None:
-                out["ls_sell_ratio"] = sell
-    except Exception:
-        pass
-
-    # Orderbook imbalance (live-only; historical not available via REST)
-    if use_live_orderbook:
-        try:
-            ob = await client.get_orderbook(symbol=symbol, limit=25)
-            bids = ob.get("b") or []
-            asks = ob.get("a") or []
-            bid_qty = 0.0
-            ask_qty = 0.0
-            for p, q in bids[:10]:
-                fq = _parse_float(q)
-                if fq is not None:
-                    bid_qty += fq
-            for p, q in asks[:10]:
-                fq = _parse_float(q)
-                if fq is not None:
-                    ask_qty += fq
-            denom = bid_qty + ask_qty
-            if denom > 0:
-                out["orderbook_imbalance"] = (bid_qty - ask_qty) / denom
-        except Exception:
-            pass
 
     # 5m klines (for RSI, ATR, consecutive green, prev_5m)
     try:
@@ -224,23 +162,22 @@ async def extract_features_for_match(
         except Exception:
             pass
 
-    # Ticker: 24h high, low, volume (live-only; for training we disable to avoid leakage)
-    if use_live_ticker:
-        try:
-            tickers = await client.get_tickers(symbols=[symbol])
-            if tickers and len(tickers) >= 1:
-                t = tickers[0]
-                high_24h = _parse_float(t.get("highPrice24h"))
-                low_24h = _parse_float(t.get("lowPrice24h"))
-                vol_24h = _parse_float(t.get("volume24h"))
-                if high_24h is not None and low_24h is not None and high_24h > low_24h:
-                    out["position_in_24h_range"] = (current_price - low_24h) / (high_24h - low_24h)
-                    out["position_in_24h_range"] = max(0.0, min(1.0, out["position_in_24h_range"]))
-                if vol_24h is not None and vol_24h > 0 and "volume_5m_raw" in out:
-                    # 288 = 5m candles in 24h
-                    out["volume_ratio"] = out["volume_5m_raw"] / (vol_24h / 288)
-        except Exception:
-            pass
+    # Ticker: 24h high, low, volume
+    try:
+        tickers = await client.get_tickers(symbols=[symbol])
+        if tickers and len(tickers) >= 1:
+            t = tickers[0]
+            high_24h = _parse_float(t.get("highPrice24h"))
+            low_24h = _parse_float(t.get("lowPrice24h"))
+            vol_24h = _parse_float(t.get("volume24h"))
+            if high_24h is not None and low_24h is not None and high_24h > low_24h:
+                out["position_in_24h_range"] = (current_price - low_24h) / (high_24h - low_24h)
+                out["position_in_24h_range"] = max(0.0, min(1.0, out["position_in_24h_range"]))
+            if vol_24h is not None and vol_24h > 0 and "volume_5m_raw" in out:
+                # 288 = 5m candles in 24h
+                out["volume_ratio"] = out["volume_5m_raw"] / (vol_24h / 288)
+    except Exception:
+        pass
     if "volume_5m_raw" in out:
         del out["volume_5m_raw"]
 

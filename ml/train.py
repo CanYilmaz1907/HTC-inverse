@@ -10,9 +10,7 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 from ml.features import FEATURE_NAMES
@@ -38,29 +36,19 @@ def train_and_save(dataset_path: Path) -> None:
     X = df[feature_cols].fillna(0).astype(float)
     y = df["label"].astype(int)
 
-    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_val_scaled = scaler.transform(X_val)
+    X_scaled = scaler.fit_transform(X)
 
-    base = RandomForestClassifier(n_estimators=400, max_depth=12, min_samples_leaf=5, random_state=42, n_jobs=-1)
-    # Calibrate probabilities so % values are more meaningful
-    clf = CalibratedClassifierCV(base, method="sigmoid", cv=3)
-    clf.fit(X_train_scaled, y_train)
-
-    val_proba = clf.predict_proba(X_val_scaled)[:, 1]
-    val_pred = (val_proba >= 0.5).astype(int)
-    val_acc = float((val_pred == y_val.to_numpy()).mean())
+    clf = RandomForestClassifier(n_estimators=200, max_depth=10, min_samples_leaf=5, random_state=42, n_jobs=-1)
+    clf.fit(X_scaled, y)
 
     joblib.dump(clf, MODEL_PATH)
     joblib.dump(scaler, SCALER_PATH)
     with open(META_PATH, "w", encoding="utf-8") as f:
-        json.dump({"feature_names": feature_cols, "val_acc": val_acc, "n_train": int(len(y_train)), "n_val": int(len(y_val))}, f, indent=2)
+        json.dump({"feature_names": feature_cols}, f, indent=2)
 
     print(f"Saved model to {MODEL_PATH}, scaler to {SCALER_PATH}, features: {feature_cols}")
     print(f"Train samples: {len(y)}, Long%: {y.mean()*100:.1f}")
-    print(f"Val acc: {val_acc:.3f}")
 
 
 def load_model_and_scaler():

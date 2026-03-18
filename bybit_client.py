@@ -115,68 +115,6 @@ class BybitClient:
         )
         return data.get("result", {}).get("list", []) or []
 
-    async def get_open_interest(
-        self,
-        symbol: str,
-        interval_time: str = "5min",
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        limit: int = 50,
-    ) -> List[Dict[str, Any]]:
-        """
-        GET /v5/market/open-interest
-        interval_time: 5min/15min/30min/1h/4h/1d
-        """
-        params: Dict[str, Any] = {
-            "category": self._config.category,
-            "symbol": symbol,
-            "intervalTime": interval_time,
-            "limit": limit,
-        }
-        if start_time is not None:
-            params["startTime"] = start_time
-        if end_time is not None:
-            params["endTime"] = end_time
-        data = await self._request("GET", "/v5/market/open-interest", params=params)
-        return data.get("result", {}).get("list", []) or []
-
-    async def get_account_ratio(
-        self,
-        symbol: str,
-        period: str = "5min",
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        limit: int = 50,
-    ) -> List[Dict[str, Any]]:
-        """
-        GET /v5/market/account-ratio
-        period: 5min/15min/30min/1h/4h/1d
-        """
-        params: Dict[str, Any] = {
-            "category": self._config.category,
-            "symbol": symbol,
-            "period": period,
-            "limit": limit,
-        }
-        if start_time is not None:
-            params["startTime"] = start_time
-        if end_time is not None:
-            params["endTime"] = end_time
-        data = await self._request("GET", "/v5/market/account-ratio", params=params)
-        return data.get("result", {}).get("list", []) or []
-
-    async def get_orderbook(self, symbol: str, limit: int = 25) -> Dict[str, Any]:
-        """
-        GET /v5/market/orderbook
-        Returns dict with bids/asks arrays under keys: b, a
-        """
-        data = await self._request(
-            "GET",
-            "/v5/market/orderbook",
-            params={"category": self._config.category, "symbol": symbol, "limit": limit},
-        )
-        return data.get("result", {}) or {}
-
     async def get_kline(
         self,
         symbol: str,
