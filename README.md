@@ -1,27 +1,24 @@
 ## Bybit Funding Rate Scanner Telegram Bot
 
-Bybit linear perpetual kontratlarında **negatif funding** ve **son 5dk’da +%2+ yükseliş** kriterlerine uyan coinleri tarar; 09:00, 13:00, 17:00’de otomatik alarm + manuel `/scan` ile Telegram’dan bildirir. İsteğe bağlı ML ile **Long ihtimali %X** gösterilir.
-
-### Gereksinimler
-
-- Python 3.11+
-- `.env` ile Telegram + Bybit ayarları
+Bu proje, Bybit perpetual kontratlarında funding rate ve kısa vadeli fiyat hareketlerini tarayarak
+belirli kriterlere uyan coinleri Telegram üzerinden bildiren async bir bottur.
 
 ### Kurulum
 
-1. Bağımlılıkları yükle:
+1. Gerekli paketleri yükle:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-2. `.env` oluştur (`.env.example` örneğine bak):
+2. `.env` dosyasını düzenle:
 
-- `TELEGRAM_BOT_TOKEN` – BotFather token
-- `TELEGRAM_CHAT_ID` – Bildirim gidecek chat ID
-- `ADMIN_USER_ID` veya `ADMIN_USER_IDS` – Admin kullanıcı ID’leri (virgülle ayrılmış)
-- `BYBIT_BASE_URL` – Mainnet: `https://api.bybit.com`
-- İsteğe bağlı: `APP_TIMEZONE` (örn. `Asia/Chita`), `MIN_PRICE_CHANGE_PERCENT` (varsayılan 2.0)
+- `TELEGRAM_BOT_TOKEN`: BotFather'dan aldığın bot token
+- `TELEGRAM_CHAT_ID`: Bildirim almak istediğin chat ID (kendi DM'in de olabilir)
+- `ADMIN_USER_ID`: `/scan` gibi admin komutlarını kullanacak Telegram user ID
+- `BYBIT_BASE_URL`: Test için `https://api-testnet.bybit.com` (varsayılan)
+
+Diğer ayarlar isteğe bağlıdır.
 
 3. Botu çalıştır:
 
@@ -29,43 +26,19 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### ML Long/Short ihtimali (isteğe bağlı)
-
-Bildirimde **Long ihtimali %X** satırı için Replit/ sunucuda bir kez:
-
-```bash
-python -m ml.dataset
-python -m ml.dataset --train
-```
-
-Detay: `ml/README.md`
-
-### Komutlar
-
-- `/start` – Hoş geldin + komut listesi
-- `/status` – Bot durumu, zaman dilimi, Bybit URL
-- `/settings` – Bildirim ayarları
-- `/scan` – Manuel tam tarama (admin)
-- `/scan_rise` – Sadece yükseliş (admin)
-- `/scan_fall` – Sadece düşüş (admin)
-
-### Otomatik tarama
-
-Scheduler her gün **09:00, 13:00, 17:00** (`.env`’deki `APP_TIMEZONE`) tam saatinde tarama yapar ve sonucu `TELEGRAM_CHAT_ID`’ye gönderir.
-
-### Ana dosyalar
-
-- `main.py` – Giriş, `run_scan_once`, scheduler hook
-- `config.py` – Ayarlar, `.env` yükleme
-- `bybit_client.py` – Bybit v5 REST (kline, funding, tickers)
-- `scanner.py` – Tarama kriterleri, eşleşmeler
-- `telegram_handler.py` – Komutlar, alarm mesajı formatı
-- `scheduler.py` – 09:00 / 13:00 / 17:00 cron
-- `ml/` – Özellik çıkarımı, veri seti, eğitim, tahmin
-
-### Docker
+### Docker ile Çalıştırma
 
 ```bash
 docker build -t bybit-funding-bot .
 docker run --env-file .env bybit-funding-bot
 ```
+
+### Ana Bileşenler
+
+- `config.py`: Ortak ayarlar ve .env yükleme
+- `bybit_client.py`: Bybit v5 REST API istemcisi (async, `aiohttp`)
+- `scanner.py`: 09:00 fiyat kaydı, 09:05 funding + fiyat taraması, SQLite (`aiosqlite`)
+- `telegram_handler.py`: Telegram komutları (/start, /status, /settings, /scan)
+- `scheduler.py`: APScheduler ile 09:00 ve 09:05 cron job'ları
+- `main.py`: Uygulama girişi, tüm bileşenleri başlatır
+
