@@ -1,9 +1,18 @@
 import asyncio
+import ssl
 from typing import Any, Dict, List, Optional
 
 import aiohttp
+import certifi
 
 from config import BybitConfig
+
+
+def create_aiohttp_session() -> aiohttp.ClientSession:
+    """Mac / yeni Python kurulumlarında SSL sertifika hatasını önler."""
+    ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+    connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+    return aiohttp.ClientSession(connector=connector)
 
 
 class BybitClient:
@@ -19,7 +28,7 @@ class BybitClient:
 
     async def __aenter__(self) -> "BybitClient":
         if self._session is None:
-            self._session = aiohttp.ClientSession()
+            self._session = create_aiohttp_session()
             self._session_owner = True
         return self
 
@@ -40,7 +49,7 @@ class BybitClient:
         initial_backoff: float = 0.5,
     ) -> Dict[str, Any]:
         if self._session is None:
-            self._session = aiohttp.ClientSession()
+            self._session = create_aiohttp_session()
             self._session_owner = True
 
         url = f"{self.base_url}{path}"
