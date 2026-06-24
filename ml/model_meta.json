@@ -1,0 +1,31 @@
+{
+  "feature_names": [
+    "funding_rate",
+    "funding_rate_prev",
+    "funding_change",
+    "oi_5m_change",
+    "oi_5m_level",
+    "ls_buy_ratio",
+    "ls_sell_ratio",
+    "orderbook_imbalance",
+    "change_5m",
+    "change_15m",
+    "change_1h",
+    "change_4h",
+    "volume_ratio",
+    "position_in_24h_range",
+    "rsi_14_5m",
+    "atr_14_pct",
+    "consecutive_green_5m",
+    "prev_5m_return",
+    "hour",
+    "day_of_week"
+  ],
+  "val_acc": 0.5098039215686274,
+  "n_train": 200,
+  "n_val": 51,
+  "class_counts": {
+    "0": 148,
+    "1": 103
+  }
+}

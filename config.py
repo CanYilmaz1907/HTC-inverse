@@ -1,11 +1,12 @@
 import os
 from dataclasses import dataclass
-from typing import Optional
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
 
-
-load_dotenv()
+# Çalışma dizini nerede olursa olsun proje kökündeki .env yüklensin (bot / paper aynı ayarlar)
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 
 @dataclass
@@ -81,7 +82,8 @@ def load_config() -> AppConfig:
         admin_ids=admin_ids,
     )
 
-    bybit_base_url = os.getenv("BYBIT_BASE_URL", "https://api-testnet.bybit.com")
+    # Ana ağ; testnet için .env içinde BYBIT_BASE_URL tanımla
+    bybit_base_url = os.getenv("BYBIT_BASE_URL", "https://api.bybit.com")
     bybit = BybitConfig(
         base_url=bybit_base_url.rstrip("/"),
         api_key=os.getenv("BYBIT_API_KEY"),
@@ -102,4 +104,20 @@ def load_config() -> AppConfig:
         criteria=criteria,
         timezone=timezone,
     )
+
+
+def run_scan_kwargs_for_telegram_command() -> Dict[str, Any]:
+    """
+    Paper / exploit içindeki run_scan çağrısı Telegram komutlarıyla hizalansın.
+    .env: SCAN_TELEGRAM_MODE = full | rise_only | fall_only
+      full      -> /scan (5m yükseliş + negatif actual funding; sık sık 0 eşleşme)
+      rise_only -> /scan_rise (funding filtresi yok; paper için varsayılan)
+      fall_only -> /scan_fall
+    """
+    m = os.getenv("SCAN_TELEGRAM_MODE", "rise_only").strip().lower()
+    if m in ("rise", "rise_only", "scan_rise"):
+        return {"require_actual_funding_negative": False, "direction": "up"}
+    if m in ("fall", "fall_only", "scan_fall"):
+        return {"require_actual_funding_negative": False, "direction": "down"}
+    return {"require_actual_funding_negative": True, "direction": "up"}
 

@@ -138,3 +138,50 @@ class BybitClient:
         )
         return data.get("result", {}).get("list", []) or []
 
+    async def get_open_interest(
+        self,
+        symbol: str,
+        interval_time: str = "5min",
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """GET /v5/market/open-interest — OI geçmişi."""
+        data = await self._request(
+            "GET",
+            "/v5/market/open-interest",
+            params={
+                "category": self._config.category,
+                "symbol": symbol,
+                "intervalTime": interval_time,
+                "limit": limit,
+            },
+        )
+        return data.get("result", {}).get("list", []) or []
+
+    async def get_orderbook(self, symbol: str, limit: int = 50) -> Dict[str, Any]:
+        """GET /v5/market/orderbook."""
+        data = await self._request(
+            "GET",
+            "/v5/market/orderbook",
+            params={"category": self._config.category, "symbol": symbol, "limit": limit},
+        )
+        return data.get("result", {}) or {}
+
+    async def get_account_ratio(
+        self,
+        symbol: str,
+        period: str = "5min",
+        limit: int = 3,
+    ) -> List[Dict[str, Any]]:
+        """GET /v5/market/account-ratio — alım/satım oranı."""
+        data = await self._request(
+            "GET",
+            "/v5/market/account-ratio",
+            params={
+                "category": self._config.category,
+                "symbol": symbol,
+                "period": period,
+                "limit": limit,
+            },
+        )
+        return data.get("result", {}).get("list", []) or []
+

@@ -91,7 +91,7 @@ async def run_scan(
     tz: dt.tzinfo,
     *,
     require_actual_funding_negative: bool = True,
-    direction: str = "up",  # "up" for rises, "down" for drops
+    direction: str = "up",  # "up" | "down" | "both" (mutlak 5m hareket >= eşik)
 ) -> ScanSummary:
     """
     Instant scan at the current moment.
@@ -171,6 +171,9 @@ async def run_scan(
         elif direction == "down":
             if chg > -criteria.min_price_change_percent:
                 continue
+        elif direction == "both":
+            if abs(chg) < criteria.min_price_change_percent:
+                continue
         else:
             continue
         if require_actual_funding_negative:
@@ -183,8 +186,11 @@ async def run_scan(
             c["funding_rate"] = fr
         matches.append(c)
 
-    # Sort by price change descending
-    matches.sort(key=lambda m: m["price_change_pct"], reverse=True)
+    # Sıralama: iki yönlü taramada mutlak hareket; tek yönde klasik sıra
+    if direction == "both":
+        matches.sort(key=lambda m: abs(m["price_change_pct"]), reverse=True)
+    else:
+        matches.sort(key=lambda m: m["price_change_pct"], reverse=True)
 
     return ScanSummary(
         total_scanned=total_scanned,

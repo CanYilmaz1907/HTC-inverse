@@ -1,5 +1,8 @@
 .env
 venv/
+.venv/
 __pycache__/
 *.pyc
 bybit_funding_bot.db
+paper_*.xlsx
+.DS_Store

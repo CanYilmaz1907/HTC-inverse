@@ -3,4 +3,8 @@ aiohttp>=3.9
 aiosqlite>=0.19
 APScheduler>=3.10
 python-dotenv>=1.0
+openpyxl>=3.1
+numpy>=1.26
+scikit-learn>=1.4
+joblib>=1.3
 
