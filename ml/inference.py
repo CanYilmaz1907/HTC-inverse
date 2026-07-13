@@ -13,14 +13,21 @@ class MLTradingSignals:
     """Eğitilmiş RandomForest + StandardScaler ile yukarı sınıfı (label=1) olasılığı."""
 
     def __init__(self, ml_dir: Optional[Path] = None) -> None:
-        root = ml_dir or Path(__file__).resolve().parent
-        meta_path = root / "model_meta.json"
+        self._root = ml_dir or Path(__file__).resolve().parent
+        self.feature_names: List[str] = []
+        self._model = None
+        self._scaler = None
+        self.meta: dict = {}
+        self.reload()
+
+    def reload(self) -> None:
+        meta_path = self._root / "model_meta.json"
         if not meta_path.is_file():
             raise FileNotFoundError(f"model_meta.json bulunamı: {meta_path}")
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        self.feature_names: List[str] = list(meta["feature_names"])
-        self._model = joblib.load(root / "model.joblib")
-        self._scaler = joblib.load(root / "scaler.joblib")
+        self.meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        self.feature_names = list(self.meta["feature_names"])
+        self._model = joblib.load(self._root / "model.joblib")
+        self._scaler = joblib.load(self._root / "scaler.joblib")
 
     def proba_up(self, features: List[float]) -> float:
         if len(features) != len(self.feature_names):

@@ -1,5 +1,8 @@
-{
-  "feature_names": [
+"""ML veri şeması — eğitim, canlı öğrenme ve inference aynı özellik sırasını kullanır."""
+
+from __future__ import annotations
+
+FEATURE_NAMES = [
     "funding_rate",
     "funding_rate_prev",
     "funding_change",
@@ -19,16 +22,8 @@
     "consecutive_green_5m",
     "prev_5m_return",
     "hour",
-    "day_of_week"
-  ],
-  "val_acc": 0.45098039215686275,
-  "n_train": 200,
-  "n_val": 51,
-  "n_total": 251,
-  "class_counts": {
-    "0": 148,
-    "1": 103
-  },
-  "trained_at": 1783923812,
-  "model": "RandomForestClassifier"
-}
+    "day_of_week",
+]
+
+META_COLUMNS = ["symbol", "ts", "target_15m_pct", "label"]
+DATASET_COLUMNS = META_COLUMNS + FEATURE_NAMES
