@@ -21,14 +21,14 @@
     "hour",
     "day_of_week"
   ],
-  "val_acc": 0.45098039215686275,
-  "n_train": 200,
-  "n_val": 51,
-  "n_total": 251,
+  "val_acc": 0.4576271186440678,
+  "n_train": 234,
+  "n_val": 59,
+  "n_total": 293,
   "class_counts": {
-    "0": 148,
-    "1": 103
+    "0": 170,
+    "1": 123
   },
-  "trained_at": 1783923812,
+  "trained_at": 1784074500,
   "model": "RandomForestClassifier"
 }
