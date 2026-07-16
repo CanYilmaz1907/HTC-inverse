@@ -2,6 +2,7 @@ venv/
 .venv/
 __pycache__/
 *.pyc
+.env
 bybit_funding_bot.db
 paper_*.xlsx
 ml/pending_observations.jsonl

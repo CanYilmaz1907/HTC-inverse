@@ -20,11 +20,12 @@ async def score_ml_candidates(
     long_min: float,
     short_max: float,
     validate_entry: Callable[[str, Dict[str, float]], Tuple[bool, str]],
+    inverse_strategy: bool = False,
 ) -> Tuple[List[Tuple[float, Dict[str, Any], str, float, List[float]]], List[Tuple[float, Dict[str, Any], str, float, Dict[str, float]]]]:
     """
     Dönüş:
-      - scored: (confidence, coin, side, p_up, feats) — işlem adayları
-      - observations: (p_up, coin, side, price, feat_dict) — öğrenme kaydı
+      - scored: (confidence, coin, side, p_up, feats) — işlem adayları (side = gerçek emir yönü)
+      - observations: (p_up, coin, side, price, feat_dict) — öğrenme kaydı (ML sinyal yönü)
     """
     sem_ml = asyncio.Semaphore(8)
     scored: List[Tuple[float, Dict[str, Any], str, float, List[float]]] = []
@@ -52,18 +53,32 @@ async def score_ml_candidates(
         if p_up >= long_min:
             ok, reason = validate_entry("long", feat_dict)
             if ok:
-                scored.append((p_up, coin, "long", p_up, feats))
+                exec_side = "short" if inverse_strategy else "long"
+                scored.append((p_up, coin, exec_side, p_up, feats))
                 observations.append((p_up, coin, "long", price, feat_dict))
-                print(f"🤖 {sym}{chg_s} | ML P={p_up:.3f} → LONG ✓")
+                if inverse_strategy:
+                    print(
+                        f"🤖 {sym}{chg_s} | ML P={p_up:.3f} → LONG ✓ | "
+                        f"🔄 TERSİ: SHORT açılacak"
+                    )
+                else:
+                    print(f"🤖 {sym}{chg_s} | ML P={p_up:.3f} → LONG ✓")
             else:
                 print(f"⏭️ {sym}{chg_s} | LONG reddedildi: {reason}")
         elif p_up <= short_max:
             ok, reason = validate_entry("short", feat_dict)
             if ok:
                 conf = 1.0 - p_up
-                scored.append((conf, coin, "short", p_up, feats))
+                exec_side = "long" if inverse_strategy else "short"
+                scored.append((conf, coin, exec_side, p_up, feats))
                 observations.append((conf, coin, "short", price, feat_dict))
-                print(f"🤖 {sym}{chg_s} | ML P={p_up:.3f} → SHORT ✓")
+                if inverse_strategy:
+                    print(
+                        f"🤖 {sym}{chg_s} | ML P={p_up:.3f} → SHORT ✓ | "
+                        f"🔄 TERSİ: LONG açılacak"
+                    )
+                else:
+                    print(f"🤖 {sym}{chg_s} | ML P={p_up:.3f} → SHORT ✓")
             else:
                 print(f"⏭️ {sym}{chg_s} | SHORT reddedildi: {reason}")
         else:
