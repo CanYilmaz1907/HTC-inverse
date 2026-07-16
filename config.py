@@ -1,0 +1,123 @@
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+from dotenv import load_dotenv
+
+# Çalışma dizini nerede olursa olsun proje kökündeki .env yüklensin (bot / paper aynı ayarlar)
+load_dotenv(Path(__file__).resolve().parent / ".env")
+
+
+@dataclass
+class TelegramConfig:
+    bot_token: str
+    chat_id: Optional[int]
+    admin_user_id: Optional[int]
+    admin_ids: list[int]
+
+
+@dataclass
+class BybitConfig:
+    base_url: str
+    api_key: Optional[str]
+    api_secret: Optional[str]
+    category: str = "linear"
+
+
+@dataclass
+class ScannerCriteria:
+    min_price_change_percent: float = 2.0
+    allowed_funding_intervals_min: tuple[int, int] = (60, 240)  # 1h or 4h
+
+
+@dataclass
+class AppConfig:
+    telegram: TelegramConfig
+    bybit: BybitConfig
+    db_path: str
+    criteria: ScannerCriteria
+    timezone: str = "UTC"
+
+
+def _get_int_env(name: str) -> Optional[int]:
+    value = os.getenv(name)
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _parse_admin_ids(single_id: Optional[int]) -> list[int]:
+    raw = os.getenv("ADMIN_USER_IDS", "")
+    ids: list[int] = []
+    if raw:
+        for part in raw.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                ids.append(int(part))
+            except ValueError:
+                continue
+    if single_id is not None and single_id not in ids:
+        ids.append(single_id)
+    return ids
+
+
+def load_config() -> AppConfig:
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if not bot_token:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN is not set in environment or .env file.")
+
+    admin_user_id = _get_int_env("ADMIN_USER_ID")
+    admin_ids = _parse_admin_ids(admin_user_id)
+
+    telegram = TelegramConfig(
+        bot_token=bot_token,
+        chat_id=_get_int_env("TELEGRAM_CHAT_ID"),
+        admin_user_id=admin_user_id,
+        admin_ids=admin_ids,
+    )
+
+    # Ana ağ; testnet için .env içinde BYBIT_BASE_URL tanımla
+    bybit_base_url = os.getenv("BYBIT_BASE_URL", "https://api.bybit.com")
+    bybit = BybitConfig(
+        base_url=bybit_base_url.rstrip("/"),
+        api_key=os.getenv("BYBIT_API_KEY"),
+        api_secret=os.getenv("BYBIT_API_SECRET"),
+    )
+
+    db_path = os.getenv("DB_PATH", "bybit_funding_bot.db")
+
+    min_change = float(os.getenv("MIN_PRICE_CHANGE_PERCENT", "2.0"))
+    criteria = ScannerCriteria(min_price_change_percent=min_change)
+
+    timezone = os.getenv("APP_TIMEZONE", "UTC")
+
+    return AppConfig(
+        telegram=telegram,
+        bybit=bybit,
+        db_path=db_path,
+        criteria=criteria,
+        timezone=timezone,
+    )
+
+
+def run_scan_kwargs_for_telegram_command() -> Dict[str, Any]:
+    """
+    Paper / exploit içindeki run_scan çağrısı Telegram komutlarıyla hizalansın.
+    .env: SCAN_TELEGRAM_MODE = full | rise_only | fall_only
+      full      -> /scan (5m yükseliş + negatif actual funding; sık sık 0 eşleşme)
+      rise_only -> /scan_rise (funding filtresi yok; paper için varsayılan)
+      fall_only -> /scan_fall
+    """
+    m = os.getenv("SCAN_TELEGRAM_MODE", "rise_only").strip().lower()
+    if m in ("rise", "rise_only", "scan_rise"):
+        return {"require_actual_funding_negative": False, "direction": "up"}
+    if m in ("fall", "fall_only", "scan_fall"):
+        return {"require_actual_funding_negative": False, "direction": "down"}
+    return {"require_actual_funding_negative": True, "direction": "up"}
+
